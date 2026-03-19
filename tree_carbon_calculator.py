@@ -103,7 +103,7 @@ if st.button("Calculate Carbon Absorption", use_container_width=True):
     """, unsafe_allow_html=True)
 
     # Year-wise table
-    st.subheader("📊 Year-wise CO2 Absorption")
+    st.subheader(" Year-wise CO2 Absorption")
     st.dataframe(pd.DataFrame(yearly_data))
 
     # Summary table
