@@ -1,74 +1,55 @@
 import streamlit as st
+from streamlit_lottie import st_lottie
 import requests
 import pandas as pd
 import math
 from PIL import Image
 import io
 
-# Page config
+# ------------------ PAGE CONFIG ------------------
 st.set_page_config(page_title="Tree Carbon Calculator", page_icon="🌳", layout="centered")
 
-# Dark Green + Olive Theme + Falling Leaves
+# ------------------ CSS STYLING ------------------
 st.markdown("""
 <style>
-
-/* Background */
-[data-testid="stAppViewContainer"] {
-    background: linear-gradient(-45deg, #1b4332, #2d6a4f, #344e41, #588157);
-    background-size: 400% 400%;
-    animation: gradientBG 15s ease infinite;
-}
-
-@keyframes gradientBG {
-    0% {background-position: 0% 50%;}
-    50% {background-position: 100% 50%;}
-    100% {background-position: 0% 50%;}
-}
-
-/* Falling Leaves */
-.leaf {
-    position: fixed;
-    top: -10px;
-    font-size: 20px;
-    animation: fall linear infinite;
-    z-index: 9999;
-}
-
-@keyframes fall {
-    0% {transform: translateY(-10px) rotate(0deg); opacity: 0.8;}
-    100% {transform: translateY(110vh) rotate(360deg); opacity: 0.1;}
-}
-
-/* Result box */
-.result-box {
-    background: rgba(255,255,255,0.08);
-    backdrop-filter: blur(10px);
-    border-radius: 18px;
-    padding: 25px;
-    text-align: center;
-    border: 1px solid rgba(255,255,255,0.2);
-}
-
-/* Text */
-h1, h2, h3, p, label {
-    color: #f1faee !important;
-}
-
+    .stApp {
+        background: linear-gradient(135deg, #2d5016 0%, #4a7023 50%, #6b8e23 100%);
+    }
+    h1, h2, h3, p, label, .stMarkdown {
+        color: #f0fff0 !important;
+    }
+    .stButton > button {
+        background-color: #556b2f !important;
+        color: white !important;
+        border: 2px solid #8fbc8f !important;
+        border-radius: 10px;
+    }
+    .stButton > button:hover {
+        background-color: #6b8e23 !important;
+    }
+    .result-box {
+        background-color: rgba(85, 107, 47, 0.8);
+        padding: 20px;
+        border-radius: 15px;
+        border: 3px solid #8fbc8f;
+        text-align: center;
+    }
 </style>
-
-<div class="leaf" style="left:5%; animation-duration: 9s;">🍃</div>
-<div class="leaf" style="left:15%; animation-duration: 11s;">🍂</div>
-<div class="leaf" style="left:25%; animation-duration: 8s;">🍃</div>
-<div class="leaf" style="left:35%; animation-duration: 12s;">🍂</div>
-<div class="leaf" style="left:45%; animation-duration: 10s;">🍃</div>
-<div class="leaf" style="left:55%; animation-duration: 13s;">🍂</div>
-<div class="leaf" style="left:65%; animation-duration: 9s;">🍃</div>
-<div class="leaf" style="left:75%; animation-duration: 11s;">🍂</div>
-<div class="leaf" style="left:85%; animation-duration: 10s;">🍃</div>
-
 """, unsafe_allow_html=True)
 
-# CO2 Rates
+# ------------------ LOTTIE ANIMATION ------------------
+def load_lottie_url(url):
+    try:
+        r = requests.get(url)
+        if r.status_code == 200:
+            return r.json()
+    except:
+        pass
+    return None
+
+lottie_tree = load_lottie_url("https://lottie.host/4db68bbd-31f6-4cd8-84eb-189571e03aed/7XY6GgSLcq.json")
+
+# ------------------ TREE DATA ------------------
 INDIAN_TREES = {
     "Peepal": 22.0,
     "Neem": 18.0,
@@ -82,111 +63,78 @@ INDIAN_TREES = {
     "Bamboo": 35.0,
 }
 
-# Scientific mapping
-SCIENTIFIC_TO_COMMON = {
-    "Ficus religiosa": "Peepal",
-    "Azadirachta indica": "Neem",
-    "Ficus benghalensis": "Banyan",
-    "Mangifera indica": "Mango",
-    "Tectona grandis": "Teak",
-    "Polyalthia longifolia": "Ashoka",
-    "Syzygium cumini": "Jamun",
-    "Tamarindus indica": "Tamarind",
-    "Cocos nucifera": "Coconut",
-    "Bambusa vulgaris": "Bamboo"
-}
+# ------------------ HEADER ------------------
+st.markdown("<h1 style='text-align: center;'>Tree Carbon Calculator</h1>", unsafe_allow_html=True)
 
-# PlantNet API
-def analyze_tree_with_plantnet(image):
+if lottie_tree:
+    st_lottie(lottie_tree, height=200, key="tree")
 
-    api_key = "2b10em1Pf7T3bO7yv58v4865Bu"
+st.markdown("---")
 
-    buffered = io.BytesIO()
-    image.save(buffered, format="JPEG")
+# ------------------ IMAGE UPLOAD & PLANT.ID API ------------------
+PLANT_ID_KEY = "YOUR_PLANT_ID_API_KEY"  # <-- replace with your Plant.id API key
+uploaded_file = st.file_uploader("Upload Tree Image", type=["jpg","jpeg","png"])
 
-    files = {
-        "images": ("tree.jpg", buffered.getvalue(), "image/jpeg")
-    }
+detected_tree = None
 
-    data = {"organs": "auto"}
-
-    url = f"https://my-api.plantnet.org/v2/identify/all?api-key={api_key}"
-
-    try:
-        response = requests.post(url, files=files, data=data)
-
-        if response.status_code != 200:
-            st.error("PlantNet API Error")
-            return None
-
-        result = response.json()
-
-        if "results" not in result or len(result["results"]) == 0:
-            st.warning("No plant detected")
-            return None
-
-        scientific = result["results"][0]["species"]["scientificNameWithoutAuthor"]
-        common = SCIENTIFIC_TO_COMMON.get(scientific, "Peepal")
-
-        return {
-            "tree_name": common,
-            "age_years": 5,
-            "height_meters": 5,
-            "trunk_diameter_meters": 0.3
-        }
-
-    except Exception:
-        st.error("Plant detection failed")
-        return None
-
-# UI
-st.title("🌳 Tree Carbon Calculator")
-
-uploaded_file = st.file_uploader("Upload Tree Image", type=["jpg", "png", "jpeg"])
-
-ai_data = None
-
-if uploaded_file:
+if uploaded_file is not None:
+    st.image(uploaded_file, caption="Uploaded Tree", use_column_width=True)
+    
+    # Resize image to speed up API
     image = Image.open(uploaded_file)
-    st.image(image, use_container_width=True)
+    image = image.resize((512, 512))
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG")
+    buf.seek(0)
+    
+    with st.spinner("Detecting tree, please wait..."):
+        try:
+            response = requests.post(
+                "https://api.plant.id/v2/identify",
+                files={"images": buf},
+                headers={"Api-Key": PLANT_ID_KEY},
+                timeout=20  # seconds
+            )
+            result = response.json()
+            # Extract the first suggestion from Plant.id API
+            detected_tree = result['suggestions'][0]['plant_name'] if 'suggestions' in result and len(result['suggestions'])>0 else None
+        except Exception as e:
+            st.error(f"Tree detection failed: {e}")
+            detected_tree = None
 
-    with st.spinner("Detecting tree..."):
-        ai_data = analyze_tree_with_plantnet(image)
+    if detected_tree:
+        st.success(f"Detected Tree Type: {detected_tree}")
+    else:
+        st.warning("Tree could not be detected. Please select manually.")
 
-tree_type_default = "Peepal"
-tree_age_default = 5
-height_default = 5.0
-diameter_default = 0.3
-
-if ai_data:
-    tree_type_default = ai_data.get("tree_name", tree_type_default)
-    tree_age_default = ai_data.get("age_years", tree_age_default)
-    height_default = ai_data.get("height_meters", height_default)
-    diameter_default = ai_data.get("trunk_diameter_meters", diameter_default)
-
+# ------------------ INPUTS ------------------
 col1, col2 = st.columns(2)
 
 with col1:
-    tree_type = st.selectbox(
-        "Tree Type",
-        list(INDIAN_TREES.keys()),
-        index=list(INDIAN_TREES.keys()).index(tree_type_default)
-    )
-    num_trees = st.number_input("Number of Trees", min_value=1, value=1)
-    tree_age = st.number_input("Tree Age", value=int(tree_age_default))
+    if detected_tree:
+        tree_type = detected_tree
+        st.text_input("Tree Type", value=tree_type, disabled=True)
+    else:
+        tree_type = st.selectbox("Select Tree Type", list(INDIAN_TREES.keys()))
+    
+    num_trees = st.number_input("Number of Trees", min_value=1, value=8)
+    tree_age = st.number_input("Tree Age (years)", min_value=1, value=5)
 
 with col2:
-    years = st.number_input("Years", value=5)
-    height = st.number_input("Height (m)", value=float(height_default))
-    diameter = st.number_input("Diameter (m)", value=float(diameter_default))
+    years = st.number_input("Number of Years", min_value=1, value=5)
+    height = st.number_input("Average Tree Height (meters)", min_value=0.5, value=5.0)
+    diameter = st.number_input("Trunk Diameter (meters)", min_value=0.05, value=0.3)
 
-if st.button("Calculate Carbon Absorption"):
+# ------------------ CALCULATION ------------------
+if st.button("Calculate Carbon Absorption", use_container_width=True):
 
-    base_rate = INDIAN_TREES[tree_type]
+    base_rate = INDIAN_TREES.get(tree_type, 10)  # fallback in case tree not in list
 
+    # Volume (cylinder approximation)
     radius = diameter / 2
     volume = math.pi * (radius ** 2) * height
 
+    # Age factor
     if tree_age <= 5:
         age_factor = 0.5
     elif tree_age <= 15:
@@ -195,14 +143,43 @@ if st.button("Calculate Carbon Absorption"):
         age_factor = 1.5
 
     dynamic_rate = base_rate * volume * age_factor
-
     total_co2_kg = num_trees * dynamic_rate * years
     total_co2_tons = total_co2_kg / 1000
 
     st.markdown(f"""
     <div class="result-box">
         <h2>Total CO2 Absorbed</h2>
-        <h1>{total_co2_tons:.3f} TONS</h1>
+        <h1 style="font-size: 48px; color: #9acd32;">{total_co2_tons:.3f} TONS</h1>
         <p>({total_co2_kg:.2f} kg)</p>
     </div>
     """, unsafe_allow_html=True)
+
+    df = pd.DataFrame({
+        "Parameter": [
+            "Tree Type",
+            "Number of Trees",
+            "Tree Age",
+            "Height (m)",
+            "Diameter (m)",
+            "Volume",
+            "CO2/tree/year (dynamic kg)"
+        ],
+        "Value": [
+            tree_type,
+            num_trees,
+            tree_age,
+            height,
+            diameter,
+            round(volume,3),
+            round(dynamic_rate,2)
+        ]
+    })
+
+    st.table(df)
+
+# ------------------ TREE CO2 REFERENCE ------------------
+with st.expander("View All Tree CO2 Base Rates"):
+    st.dataframe(pd.DataFrame({
+        "Tree": INDIAN_TREES.keys(),
+        "Base CO2 (kg/year)": INDIAN_TREES.values()
+    }))
