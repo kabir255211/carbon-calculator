@@ -3,13 +3,11 @@ from streamlit_lottie import st_lottie
 import requests
 import pandas as pd
 import math
-from PIL import Image
-import io
 
-# ------------------ PAGE CONFIG ------------------
+# Page config
 st.set_page_config(page_title="Tree Carbon Calculator", page_icon="🌳", layout="centered")
 
-# ------------------ CSS STYLING ------------------
+# Green & Olive CSS
 st.markdown("""
 <style>
     .stApp {
@@ -37,7 +35,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ------------------ LOTTIE ANIMATION ------------------
+# Load Lottie animation
 def load_lottie_url(url):
     try:
         r = requests.get(url)
@@ -49,7 +47,7 @@ def load_lottie_url(url):
 
 lottie_tree = load_lottie_url("https://lottie.host/4db68bbd-31f6-4cd8-84eb-189571e03aed/7XY6GgSLcq.json")
 
-# ------------------ TREE DATA ------------------
+# Tree CO2 base absorption rates (kg/year)
 INDIAN_TREES = {
     "Peepal": 22.0,
     "Neem": 18.0,
@@ -63,51 +61,30 @@ INDIAN_TREES = {
     "Bamboo": 35.0,
 }
 
-# ------------------ HEADER ------------------
+# Header
 st.markdown("<h1 style='text-align: center;'>Tree Carbon Calculator</h1>", unsafe_allow_html=True)
 
+# Animation
 if lottie_tree:
     st_lottie(lottie_tree, height=200, key="tree")
 
 st.markdown("---")
 
-# ------------------ IMAGE UPLOAD & PLANT.ID API ------------------
-PLANT_ID_KEY = "YOUR_PLANT_ID_API_KEY"  # <-- replace with your Plant.id API key
+# ---------------- IMAGE UPLOAD ----------------
 uploaded_file = st.file_uploader("Upload Tree Image", type=["jpg","jpeg","png"])
 
 detected_tree = None
 
 if uploaded_file is not None:
     st.image(uploaded_file, caption="Uploaded Tree", use_column_width=True)
-    
-    # Resize image to speed up API
-    image = Image.open(uploaded_file)
-    image = image.resize((512, 512))
-    buf = io.BytesIO()
-    image.save(buf, format="JPEG")
-    buf.seek(0)
-    
-    with st.spinner("Detecting tree, please wait..."):
-        try:
-            response = requests.post(
-                "https://api.plant.id/v2/identify",
-                files={"images": buf},
-                headers={"Api-Key": PLANT_ID_KEY},
-                timeout=20  # seconds
-            )
-            result = response.json()
-            # Extract the first suggestion from Plant.id API
-            detected_tree = result['suggestions'][0]['plant_name'] if 'suggestions' in result and len(result['suggestions'])>0 else None
-        except Exception as e:
-            st.error(f"Tree detection failed: {e}")
-            detected_tree = None
 
-    if detected_tree:
-        st.success(f"Detected Tree Type: {detected_tree}")
-    else:
-        st.warning("Tree could not be detected. Please select manually.")
+    # Temporary detection logic (will replace with AI later)
+    # You can modify this later with API
+    detected_tree = "Peepal"
 
-# ------------------ INPUTS ------------------
+    st.success(f"Detected Tree Type: {detected_tree}")
+
+# ---------------- INPUTS ----------------
 col1, col2 = st.columns(2)
 
 with col1:
@@ -116,7 +93,7 @@ with col1:
         st.text_input("Tree Type", value=tree_type, disabled=True)
     else:
         tree_type = st.selectbox("Select Tree Type", list(INDIAN_TREES.keys()))
-    
+
     num_trees = st.number_input("Number of Trees", min_value=1, value=8)
     tree_age = st.number_input("Tree Age (years)", min_value=1, value=5)
 
@@ -125,12 +102,12 @@ with col2:
     height = st.number_input("Average Tree Height (meters)", min_value=0.5, value=5.0)
     diameter = st.number_input("Trunk Diameter (meters)", min_value=0.05, value=0.3)
 
-# ------------------ CALCULATION ------------------
+# ---------------- CALCULATION ----------------
 if st.button("Calculate Carbon Absorption", use_container_width=True):
 
-    base_rate = INDIAN_TREES.get(tree_type, 10)  # fallback in case tree not in list
+    base_rate = INDIAN_TREES[tree_type]
 
-    # Volume (cylinder approximation)
+    # Volume calculation (cylinder)
     radius = diameter / 2
     volume = math.pi * (radius ** 2) * height
 
@@ -142,7 +119,9 @@ if st.button("Calculate Carbon Absorption", use_container_width=True):
     else:
         age_factor = 1.5
 
+    # Dynamic CO2 rate
     dynamic_rate = base_rate * volume * age_factor
+
     total_co2_kg = num_trees * dynamic_rate * years
     total_co2_tons = total_co2_kg / 1000
 
@@ -177,7 +156,7 @@ if st.button("Calculate Carbon Absorption", use_container_width=True):
 
     st.table(df)
 
-# ------------------ TREE CO2 REFERENCE ------------------
+# Reference
 with st.expander("View All Tree CO2 Base Rates"):
     st.dataframe(pd.DataFrame({
         "Tree": INDIAN_TREES.keys(),
