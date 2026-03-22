@@ -5,6 +5,7 @@ import pandas as pd
 import math
 from PIL import Image
 import io
+import base64
 import hashlib
 
 # ------------------ PAGE CONFIG ------------------
@@ -48,22 +49,32 @@ if lottie_tree:
 st.markdown("---")
 
 # ------------------ PLANT.ID API FUNCTION ------------------
-PLANT_ID_KEY = "YOUR_PLANT_ID_API_KEY"  # Replace with your key
+PLANT_ID_KEY = "YOUR_PLANT_ID_API_KEY"  # <-- replace with your Plant.id API key
 
 @st.cache_data(show_spinner=False)
-def detect_tree(image_bytes):
+def detect_tree_plantid(image: Image.Image):
+    buffered = io.BytesIO()
+    image.save(buffered, format="JPEG")
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+
+    url = "https://api.plant.id/v2/identify"
+    headers = {"Api-Key": PLANT_ID_KEY, "Content-Type": "application/json"}
+    payload = {
+        "images": [img_str],
+        "modifiers": ["crops_fast", "tree"],
+        "organs": ["leaf"]
+    }
+
     try:
-        response = requests.post(
-            "https://api.plant.id/v2/identify",
-            files={"images": image_bytes},
-            headers={"Api-Key": PLANT_ID_KEY},
-            timeout=15
-        )
-        result = response.json()
-        if "suggestions" in result and len(result['suggestions']) > 0:
-            return result['suggestions'][0]['plant_name']
+        r = requests.post(url, headers=headers, json=payload, timeout=20)
+        r.raise_for_status()
+        result = r.json()
+        if "suggestions" in result and len(result["suggestions"]) > 0:
+            # Pick the suggestion with the highest probability
+            suggestion = max(result["suggestions"], key=lambda x: x["probability"])
+            return suggestion["plant_name"]
     except Exception as e:
-        return None
+        st.error(f"Tree detection failed: {e}")
     return None
 
 # ------------------ IMAGE UPLOAD ------------------
@@ -72,17 +83,13 @@ detected_tree = None
 
 if uploaded_file is not None:
     st.image(uploaded_file, caption="Uploaded Tree", use_column_width=True)
-    image = Image.open(uploaded_file)
-    image = image.resize((512, 512))
-    buf = io.BytesIO()
-    image.save(buf, format="JPEG")
-    buf.seek(0)
-    
-    # hash to prevent repeated API calls on same image
-    image_hash = hashlib.md5(buf.getvalue()).hexdigest()
+    image = Image.open(uploaded_file).resize((512,512))
+
+    # Hash to avoid repeated API calls
+    image_hash = hashlib.md5(image.tobytes()).hexdigest()
     if "detected_hash" not in st.session_state or st.session_state.detected_hash != image_hash:
         with st.spinner("Detecting tree, please wait..."):
-            detected_tree = detect_tree(buf.getvalue())
+            detected_tree = detect_tree_plantid(image)
             st.session_state.detected_tree = detected_tree
             st.session_state.detected_hash = image_hash
     else:
